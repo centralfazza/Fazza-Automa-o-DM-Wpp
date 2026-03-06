@@ -34,7 +34,7 @@ SCOPES = ",".join([
 
 def generate_oauth_url(state: str) -> str:
     """Gera URL de autorização do Facebook OAuth."""
-    return (
+    url = (
         f"https://www.facebook.com/dialog/oauth"
         f"?client_id={APP_ID}"
         f"&redirect_uri={REDIRECT_URI}"
@@ -42,6 +42,8 @@ def generate_oauth_url(state: str) -> str:
         f"&state={state}"
         f"&response_type=code"
     )
+    logger.info(f"Generated OAuth URL: {url}")
+    return url
 
 
 def exchange_code_for_token(code: str) -> dict:
