@@ -1,0 +1,36 @@
+# Configurações do Vercel e Ambiente
+.vercel
+.env
+.env*.local
+.env.example
+
+# Logs e Bancos de Dados locais
+*.log
+automation.db
+.agents/
+.agent/
+_agents/
+_agent/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+venv/
+ENV/
+.python-version
+
+# Node.js
+node_modules/
+dist/
+build/
+.next/
+.cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
