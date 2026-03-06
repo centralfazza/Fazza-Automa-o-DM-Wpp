@@ -1,10 +1,11 @@
 import os
 import httpx
+import asyncio
 from typing import Optional
 
 class MetaAPIClient:
     def __init__(self):
-        self.ig_token = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
+        self.ig_token = os.getenv("META_ACCESS_TOKEN", "")
         self.wa_token = os.getenv("WHATSAPP_API_TOKEN", "")
         self.ig_url = "https://graph.facebook.com/v18.0"
         self.wa_url = "https://graph.facebook.com/v18.0"

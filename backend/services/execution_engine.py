@@ -1,10 +1,9 @@
 import asyncio
 from typing import Dict, Any, List, Optional
 from services.meta_api import meta_api
-
-# Note: In a real production app, imports to database/models would be needed here to save logs/tags
-# from database import SessionLocal
-# import models
+from database import AsyncSessionLocal
+import models
+from sqlalchemy import select
 
 class ExecutionEngine:
     def __init__(self, automation: Dict[str, Any], contact: Dict[str, Any], initial_message: str):
@@ -31,7 +30,7 @@ class ExecutionEngine:
 
     async def run(self):
         """Starts the flow execution from the Trigger node"""
-        print(f"✅ Starting Native Execution Engine: {self.automation.get('name')}")
+        print(f"✅ Executing Native Flow: {self.automation.get('name')}")
         
         trigger_node = next((n for n in self.nodes if n.get('type') == 'trigger'), None)
         if not trigger_node:
@@ -51,7 +50,6 @@ class ExecutionEngine:
             if node and node.get('type') == 'randomSplit':
                 import random
                 if outgoing_edges:
-                    # Logic: pick a random edge. In a real app, uses data.weights
                     selected_edge = random.choice(outgoing_edges)
                     outgoing_edges = [selected_edge]
 
@@ -61,7 +59,6 @@ class ExecutionEngine:
                 
                 # Cycle detection
                 if (next_node_id, edge_id) in self.visited:
-                    print(f"⚠️ Cycle detected at {next_node_id}. Skipping.")
                     continue
                 self.visited.add((next_node_id, edge_id))
 
@@ -73,7 +70,7 @@ class ExecutionEngine:
                     if should_continue:
                         queue.append((next_node_id, edge))
                 except Exception as e:
-                    print(f"❌ Error at node {next_node_id}: {e}")
+                    print(f"❌ Execution error: {e}")
 
     def _replace_variables(self, text: str) -> str:
         if not text: return ""
@@ -90,7 +87,6 @@ class ExecutionEngine:
     async def _execute_node(self, node: Dict[str, Any], edge_traversed: Dict[str, Any]) -> bool:
         node_type = node.get('type')
         data = node.get('data', {})
-        print(f"▶️ Executing: {node_type} - {data.get('label', 'Unnamed')}")
 
         if node_type == 'message':
             content = self._replace_variables(data.get('content', ''))
@@ -98,36 +94,24 @@ class ExecutionEngine:
 
         elif node_type == 'delay':
             duration = int(data.get('duration', 5))
-            u = data.get('unit', 'm')
+            u = data.get('unit', 's')
             sleep_time = duration * (60 if u == 'm' else 3600 if u == 'h' else 86400 if u == 'd' else 1)
-            print(f"⏳ Sleeping {duration}{u}...")
-            await asyncio.sleep(min(sleep_time, 2)) # Cap for demo
+            print(f"⏳ Delay {duration}{u}...")
+            await asyncio.sleep(sleep_time)
             return True
 
         elif node_type == 'action':
             a_type = data.get('actionType')
-            if a_type == 'buttons':
-                # Special interactive message handling
-                btns = data.get('buttons', [])
-                content = self._replace_variables(data.get('label', 'Escolha uma opção:'))
-                print(f"🔘 Sending Buttons: {btns}")
-                return await self._send_msg(f"{content} (Buttons: {[b.get('text') for b in btns]})")
-            
-            print(f"🔧 Action: {a_type} -> {data.get('value')}")
+            print(f"🔧 Action Node: {a_type}")
             return True
 
         elif node_type == 'logic':
             source_handle = edge_traversed.get('sourceHandle')
             cond = data.get('condition', '').lower()
-            passed = True # Simplified
-            if 'vip' in cond:
-                passed = 'vip' in [t.lower() for t in self.contact.get('tags', [])]
-            
-            print(f"🔀 Logic '{cond}': {passed} (Match handle: {source_handle})")
+            passed = True # Simplified logic
             return (passed and source_handle == 'true') or (not passed and source_handle == 'false')
 
         elif node_type == 'randomSplit':
-            # This node itself doesn't "do" anything, logic is handled in run()
             return True
 
         return True
@@ -137,9 +121,7 @@ class ExecutionEngine:
         if platform == 'instagram':
             return await meta_api.send_instagram_message(self.contact.get('external_id'), text)
         elif platform == 'whatsapp':
-            return await meta_api.send_whatsapp_message(
-                self.contact.get('phone', 'unknown'), text, "default_wa_id")
+            phone = self.contact.get('phone') or self.contact.get('external_id')
+            return await meta_api.send_whatsapp_message(phone, text, "default")
         return False
-
-        return True
 
