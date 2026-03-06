@@ -10,27 +10,24 @@ except ImportError:
     pass
 
 # Supabase PostgreSQL em produção, SQLite local como fallback
-DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
+DATABASE_URL = os.getenv("POSTGRES_URL_NON_POOLING") or os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
 
 if not DATABASE_URL:
     DATABASE_URL = "sqlite:///./automation.db"
     print("WARNING: DATABASE_URL not found, using SQLite fallback")
 else:
-    # Sanitização para o driver psycopg2 que não aceita certos parâmetros do pooler da Vercel
+    # Garante prefixo postgresql://
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
     
-    # Remove parâmetro supa=... que causa erro no psycopg2
-    if "supa=" in DATABASE_URL:
-        # Pega a parte antes do query parameter ou remove apenas o parâmetro problemático
-        import urllib.parse as urlparse
-        url_parts = list(urlparse.urlparse(DATABASE_URL))
-        query = dict(urlparse.parse_qsl(url_parts[4]))
-        query.pop('supa', None) # Remove 'supa' se existir
-        url_parts[4] = urlparse.urlencode(query)
-        DATABASE_URL = urlparse.urlunparse(url_parts)
+    # Remove parâmetros problemáticos (como supa=...) que o psycopg2 não entende
+    if "?" in DATABASE_URL:
+        base_url = DATABASE_URL.split("?")[0]
+        # Tentamos manter apenas o que é essencial ou apenas a base url se necessário
+        # Para SQLAlchemy + PostgreSQL, a base URL funcional costuma ser suficiente
+        DATABASE_URL = base_url
 
-print(f"INFO: Connecting to database (sanitized URL used)")
+print(f"INFO: Connecting to database")
 
 # PostgreSQL não usa check_same_thread
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
