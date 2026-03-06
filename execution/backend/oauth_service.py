@@ -18,8 +18,10 @@ APP_ID = os.getenv("INSTAGRAM_APP_ID", "")
 APP_SECRET = os.getenv("INSTAGRAM_APP_SECRET", "")
 REDIRECT_URI = os.getenv(
     "INSTAGRAM_REDIRECT_URI",
-    "https://automacao-dm-ivory.vercel.app/api/auth/instagram/callback"
+    "https://automacao-dm.vercel.app/api/auth/instagram/callback"
 )
+
+logger.info(f"Oauth config: APP_ID={APP_ID[:4]}***, REDIRECT_URI={REDIRECT_URI}")
 
 SCOPES = ",".join([
     "instagram_basic",
