@@ -1,0 +1,111 @@
+{
+    "info": {
+        "_postman_id": "fazza-crm-automation-api",
+        "name": "Fazza CRM Automation API",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "Login",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "urlencoded",
+                            "urlencoded": [
+                                {
+                                    "key": "username",
+                                    "value": "test@fazza.com",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "password",
+                                    "value": "secret",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": "{{base_url}}/api/auth/login"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Automations",
+            "item": [
+                {
+                    "name": "List Automations",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/automations"
+                    }
+                },
+                {
+                    "name": "Create Automation",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Welcome Bot\",\n  \"flow_json\": { \"platform\": \"instagram\" },\n  \"triggers\": [{ \"type\": \"keyword\", \"keywords\": [\"hi\"] }]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": "{{base_url}}/api/automations"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Webhooks",
+            "item": [
+                {
+                    "name": "Instagram Webhook (Meta)",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"entry\": [{\n    \"messaging\": [{\n      \"message\": { \"text\": \"hi\" }\n    }]\n  }]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": "{{base_url}}/api/webhooks/instagram"
+                    }
+                }
+            ]
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000"
+        },
+        {
+            "key": "token",
+            "value": ""
+        }
+    ]
+}

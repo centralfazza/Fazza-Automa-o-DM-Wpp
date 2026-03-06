@@ -1,268 +1,145 @@
-"""
-Motor de automação - Código determinístico
-Processa comentários Instagram, DMs recebidas e novos seguidores
-"""
-import logging
-from typing import Dict, List, Optional
-from sqlalchemy.orm import Session
-from execution.backend.models import Automation, Company, Contact, AnalyticsLog
-from execution.backend.instagram_service import InstagramAPI
-from datetime import datetime
-import time
+import asyncio
+from typing import Dict, Any, List, Optional
+from execution.backend.instagram_service import meta_api
 
-logger = logging.getLogger(__name__)
+# Note: In a real production app, imports to database/models would be needed here to save logs/tags
+# from execution.backend.database import SessionLocal
+# from execution.backend import models
 
-class AutomationEngine:
-    """Motor de automação determinístico"""
+class ExecutionEngine:
+    def __init__(self, automation: Dict[str, Any], contact: Dict[str, Any], initial_message: str):
+        self.automation = automation # The DB record dump
+        self.contact = contact       # The DB record dump OR dict with id, platform, phone, external_id
+        self.initial_message = initial_message
+        
+        # Parse the Flow JSON
+        self.graph = self.automation.get('actions', {})
+        self.nodes = self.graph.get('nodes', [])
+        self.edges = self.graph.get('edges', [])
+        
+        # Helper maps
+        self.node_map = {n['id']: n for n in self.nodes}
+        self.visited = set() # (node_id, incoming_edge_id) to prevent infinite cycles
+        
+        # Build adjacency list: node_id -> list of outgoing edges
+        self.adj_list = {}
+        for edge in self.edges:
+            src = edge['source']
+            if src not in self.adj_list:
+                self.adj_list[src] = []
+            self.adj_list[src].append(edge)
 
-    def __init__(self, db: Session):
-        self.db = db
+    async def run(self):
+        """Starts the flow execution from the Trigger node"""
+        print(f"✅ Starting Native Execution Engine: {self.automation.get('name')}")
+        
+        trigger_node = next((n for n in self.nodes if n.get('type') == 'trigger'), None)
+        if not trigger_node:
+            print("❌ No trigger node found.")
+            return
 
-    # ─── Comentários ──────────────────────────────────────────────────────────
+        queue = [(trigger_node['id'], None)] 
+        
+        while queue:
+            current_node_id, incoming_edge = queue.pop(0)
+            
+            # Executing node children
+            outgoing_edges = self.adj_list.get(current_node_id, [])
+            
+            # If current node is a RandomSplit, we only pick ONE edge
+            node = self.node_map.get(current_node_id)
+            if node and node.get('type') == 'randomSplit':
+                import random
+                if outgoing_edges:
+                    # Logic: pick a random edge. In a real app, uses data.weights
+                    selected_edge = random.choice(outgoing_edges)
+                    outgoing_edges = [selected_edge]
 
-    def process_instagram_comment(self, webhook_data: Dict) -> Dict:
-        """Processa comentário do Instagram"""
-        try:
-            comment_id = webhook_data['id']
-            comment_text = webhook_data['text']
-            commenter_id = webhook_data['from']['id']
-            commenter_username = webhook_data['from']['username']
-            instagram_account_id = webhook_data['instagram_account_id']
+            for edge in outgoing_edges:
+                next_node_id = edge.get('target')
+                edge_id = edge.get('id', f"{current_node_id}->{next_node_id}")
+                
+                # Cycle detection
+                if (next_node_id, edge_id) in self.visited:
+                    print(f"⚠️ Cycle detected at {next_node_id}. Skipping.")
+                    continue
+                self.visited.add((next_node_id, edge_id))
 
-            logger.info(f"Processing comment {comment_id} from {commenter_username}")
+                next_node = self.node_map.get(next_node_id)
+                if not next_node: continue
+                
+                try:
+                    should_continue = await self._execute_node(next_node, edge)
+                    if should_continue:
+                        queue.append((next_node_id, edge))
+                except Exception as e:
+                    print(f"❌ Error at node {next_node_id}: {e}")
 
-            company = self._get_company(instagram_account_id)
-            if not company:
-                return {'success': False, 'error': 'Company not found'}
-
-            automations = self._get_active_automations(company.id)
-            matched = self._match_automation(automations, comment_text, trigger_type='comment')
-
-            if not matched:
-                return {'success': True, 'matched': False}
-
-            context = {
-                'username': commenter_username,
-                'commenter_id': commenter_id,
-                'comment_id': comment_id,
-                'company': company,
-            }
-
-            result = self._execute_actions(matched, context)
-            self._log_execution(matched.id, result['success'], webhook_data, result.get('error'))
-            return result
-
-        except Exception as e:
-            logger.error(f"Error processing comment: {str(e)}")
-            return {'success': False, 'error': str(e)}
-
-    # ─── DMs recebidas ────────────────────────────────────────────────────────
-
-    def process_instagram_dm(self, webhook_data: Dict) -> Dict:
-        """
-        Processa DM recebida no Instagram.
-        webhook_data esperado:
-          {sender_id, recipient_id, message_text, instagram_account_id}
-        """
-        try:
-            sender_id = webhook_data['sender_id']
-            message_text = webhook_data.get('message_text', '')
-            instagram_account_id = webhook_data['instagram_account_id']
-            sender_username = webhook_data.get('sender_username', sender_id)
-
-            logger.info(f"Processing DM from {sender_id}: {message_text[:50]}")
-
-            company = self._get_company(instagram_account_id)
-            if not company:
-                return {'success': False, 'error': 'Company not found'}
-
-            automations = self._get_active_automations(company.id)
-            matched = self._match_automation(automations, message_text, trigger_type='dm')
-
-            if not matched:
-                return {'success': True, 'matched': False}
-
-            context = {
-                'username': sender_username,
-                'commenter_id': sender_id,
-                'comment_id': None,
-                'company': company,
-            }
-
-            result = self._execute_actions(matched, context)
-            self._log_execution(matched.id, result['success'], webhook_data, result.get('error'))
-            return result
-
-        except Exception as e:
-            logger.error(f"Error processing DM: {str(e)}")
-            return {'success': False, 'error': str(e)}
-
-    # ─── Novo seguidor ────────────────────────────────────────────────────────
-
-    def process_new_follower(self, webhook_data: Dict) -> Dict:
-        """
-        Processa evento de novo seguidor.
-        Dispara automações do tipo trigger 'follow' (sem keyword match).
-        webhook_data esperado:
-          {follower_id, follower_username, instagram_account_id}
-        """
-        try:
-            follower_id = webhook_data['follower_id']
-            follower_username = webhook_data.get('follower_username', follower_id)
-            instagram_account_id = webhook_data['instagram_account_id']
-
-            logger.info(f"New follower: {follower_username} ({follower_id})")
-
-            company = self._get_company(instagram_account_id)
-            if not company:
-                return {'success': False, 'error': 'Company not found'}
-
-            automations = self._get_active_automations(company.id)
-            follow_automation = next(
-                (a for a in automations if a.triggers.get('type') == 'follow'),
-                None
-            )
-
-            if not follow_automation:
-                return {'success': True, 'matched': False}
-
-            context = {
-                'username': follower_username,
-                'commenter_id': follower_id,
-                'comment_id': None,
-                'company': company,
-            }
-
-            result = self._execute_actions(follow_automation, context)
-            self._log_execution(follow_automation.id, result['success'], webhook_data, result.get('error'))
-            return result
-
-        except Exception as e:
-            logger.error(f"Error processing new follower: {str(e)}")
-            return {'success': False, 'error': str(e)}
-
-    # ─── Helpers internos ─────────────────────────────────────────────────────
-
-    def _get_company(self, instagram_account_id: str) -> Optional[Company]:
-        company = self.db.query(Company).filter(
-            Company.instagram_account_id == instagram_account_id
-        ).first()
-        if not company:
-            logger.warning(f"Company not found for Instagram account {instagram_account_id}")
-        return company
-
-    def _get_active_automations(self, company_id: str) -> List[Automation]:
-        return self.db.query(Automation).filter(
-            Automation.company_id == company_id,
-            Automation.platform == 'instagram',
-            Automation.is_active == True
-        ).all()
-
-    def _match_automation(self, automations: List[Automation], text: str, trigger_type: str) -> Optional[Automation]:
-        """Match de automação baseado em keywords (determinístico)"""
-        text_lower = text.lower()
-
-        for automation in automations:
-            triggers = automation.triggers
-
-            if triggers.get('type') != trigger_type:
-                continue
-
-            keywords = triggers.get('keywords', [])
-
-            for keyword in keywords:
-                if keyword.lower() in text_lower:
-                    logger.info(f"Matched automation {automation.id} with keyword '{keyword}'")
-                    return automation
-
-        return None
-
-    def _execute_actions(self, automation: Automation, context: Dict) -> Dict:
-        """Executa lista de actions sequencialmente (determinístico)"""
-        company = context['company']
-        instagram_api = InstagramAPI(company.instagram_access_token)
-
-        results = []
-        actions = sorted(automation.actions, key=lambda x: x['order'])
-
-        for action in actions:
-            action_type = action['type']
-
-            try:
-                if action_type == 'reply_comment' and context.get('comment_id'):
-                    message = self._replace_variables(action['content'], context)
-                    instagram_api.reply_to_comment(context['comment_id'], message)
-                    results.append({'action': 'reply_comment', 'success': True})
-
-                elif action_type == 'send_dm':
-                    message = self._replace_variables(action['content'], context)
-                    instagram_api.send_dm(context['commenter_id'], message)
-                    results.append({'action': 'send_dm', 'success': True})
-
-                elif action_type == 'delay':
-                    seconds = action.get('seconds', 0)
-                    time.sleep(seconds)
-                    results.append({'action': 'delay', 'seconds': seconds})
-
-                elif action_type == 'add_tag':
-                    self._add_contact_tag(company.id, context['commenter_id'], action['tag'])
-                    results.append({'action': 'add_tag', 'success': True})
-
-            except Exception as e:
-                error_msg = str(e)
-                logger.error(f"Error executing action {action_type}: {error_msg}")
-                results.append({'action': action_type, 'success': False, 'error': error_msg})
-
-        success = all(r.get('success', True) for r in results)
-        return {
-            'success': success,
-            'actions_executed': len(results),
-            'results': results,
-            'error': None if success else "Some actions failed"
+    def _replace_variables(self, text: str) -> str:
+        if not text: return ""
+        variables = {
+            "{firstName}": self.contact.get("name", "Usuário"),
+            "{name}": self.contact.get("name", "Usuário"),
+            "{phone}": self.contact.get("phone", "N/A"),
+            "{platform}": self.contact.get("platform", "N/A"),
         }
-
-    def _replace_variables(self, text: str, context: Dict) -> str:
-        """Substitui variáveis no texto (determinístico)"""
-        replacements = {
-            '{username}': context.get('username', ''),
-            '{time}': datetime.now().strftime('%H:%M'),
-            '{date}': datetime.now().strftime('%d/%m/%Y'),
-        }
-
-        for var, value in replacements.items():
-            text = text.replace(var, value)
-
+        for placeholder, value in variables.items():
+            text = text.replace(placeholder, str(value))
         return text
 
-    def _add_contact_tag(self, company_id: str, external_id: str, tag: str):
-        """Adiciona tag no contato"""
-        contact = self.db.query(Contact).filter(
-            Contact.company_id == company_id,
-            Contact.external_id == external_id
-        ).first()
+    async def _execute_node(self, node: Dict[str, Any], edge_traversed: Dict[str, Any]) -> bool:
+        node_type = node.get('type')
+        data = node.get('data', {})
+        print(f"▶️ Executing: {node_type} - {data.get('label', 'Unnamed')}")
 
-        if not contact:
-            contact = Contact(
-                company_id=company_id,
-                platform='instagram',
-                external_id=external_id,
-                tags=[tag]
-            )
-            self.db.add(contact)
-        else:
-            if tag not in contact.tags:
-                contact.tags.append(tag)
+        if node_type == 'message':
+            content = self._replace_variables(data.get('content', ''))
+            return await self._send_msg(content)
 
-        self.db.commit()
+        elif node_type == 'delay':
+            duration = int(data.get('duration', 5))
+            u = data.get('unit', 'm')
+            sleep_time = duration * (60 if u == 'm' else 3600 if u == 'h' else 86400 if u == 'd' else 1)
+            print(f"⏳ Sleeping {duration}{u}...")
+            await asyncio.sleep(min(sleep_time, 2)) # Cap for demo
+            return True
 
-    def _log_execution(self, automation_id: str, success: bool, trigger_data: Dict, error_message: Optional[str] = None):
-        """Loga execução no banco"""
-        log = AnalyticsLog(
-            automation_id=automation_id,
-            executed_at=datetime.utcnow(),
-            success=success,
-            trigger_data=trigger_data,
-            error_message=error_message
-        )
-        self.db.add(log)
-        self.db.commit()
+        elif node_type == 'action':
+            a_type = data.get('actionType')
+            if a_type == 'buttons':
+                # Special interactive message handling
+                btns = data.get('buttons', [])
+                content = self._replace_variables(data.get('label', 'Escolha uma opção:'))
+                print(f"🔘 Sending Buttons: {btns}")
+                return await self._send_msg(f"{content} (Buttons: {[b.get('text') for b in btns]})")
+            
+            print(f"🔧 Action: {a_type} -> {data.get('value')}")
+            return True
+
+        elif node_type == 'logic':
+            source_handle = edge_traversed.get('sourceHandle')
+            cond = data.get('condition', '').lower()
+            passed = True # Simplified
+            if 'vip' in cond:
+                passed = 'vip' in [t.lower() for t in self.contact.get('tags', [])]
+            
+            print(f"🔀 Logic '{cond}': {passed} (Match handle: {source_handle})")
+            return (passed and source_handle == 'true') or (not passed and source_handle == 'false')
+
+        elif node_type == 'randomSplit':
+            # This node itself doesn't "do" anything, logic is handled in run()
+            return True
+
+        return True
+
+    async def _send_msg(self, text: str) -> bool:
+        platform = self.automation.get('platform')
+        if platform == 'instagram':
+            return await meta_api.send_instagram_message(self.contact.get('external_id'), text)
+        elif platform == 'whatsapp':
+            return await meta_api.send_whatsapp_message(
+                self.contact.get('phone', 'unknown'), text, "default_wa_id")
+        return False
+
+        return True
+

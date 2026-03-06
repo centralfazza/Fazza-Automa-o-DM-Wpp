@@ -1,0 +1,691 @@
+{
+    "name": "automation_master",
+    "nodes": [
+        {
+            "parameters": {
+                "content": "### WEBHOOKS & INPUT\nRecebe os gatilhos do Instagram.",
+                "height": 700,
+                "width": 300,
+                "color": 1
+            },
+            "name": "Note: Webhooks",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                -350,
+                -50
+            ],
+            "id": "note_webhooks"
+        },
+        {
+            "parameters": {
+                "content": "### SANITIZATION\nLimpa dados e remove caracteres perigosos.",
+                "height": 300,
+                "width": 300,
+                "color": 2
+            },
+            "name": "Note: Sanitize",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                100,
+                150
+            ],
+            "id": "note_sanitize"
+        },
+        {
+            "parameters": {
+                "content": "### BUSINESS LOGIC\nMatch de empresa e automação.",
+                "height": 300,
+                "width": 500,
+                "color": 3
+            },
+            "name": "Note: Logic",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                450,
+                150
+            ],
+            "id": "note_logic"
+        },
+        {
+            "parameters": {
+                "content": "### LOGGING & RESPONSE\nAnalytics e Retorno Padronizado BR.",
+                "height": 300,
+                "width": 500,
+                "color": 5
+            },
+            "name": "Note: Response",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                2150,
+                150
+            ],
+            "id": "note_response"
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "instagram/follower",
+                "responseMode": "responseNode"
+            },
+            "name": "New Follower Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                -300,
+                50
+            ],
+            "id": "trigger_follower"
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "instagram/message",
+                "responseMode": "responseNode"
+            },
+            "name": "DM Received Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                -300,
+                180
+            ],
+            "id": "trigger_dm"
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "instagram/comment",
+                "responseMode": "responseNode"
+            },
+            "name": "Comment Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                -300,
+                310
+            ],
+            "id": "trigger_comment"
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "instagram/story_mention",
+                "responseMode": "responseNode"
+            },
+            "name": "Story Mention Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                -300,
+                440
+            ],
+            "id": "trigger_mention"
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "instagram/story_reply",
+                "responseMode": "responseNode"
+            },
+            "name": "Story Reply Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                -300,
+                570
+            ],
+            "id": "trigger_reply"
+        },
+        {
+            "parameters": {
+                "mode": "combine",
+                "combinationMode": "mergeByPosition"
+            },
+            "name": "Merge Triggers",
+            "type": "n8n-nodes-base.merge",
+            "typeVersion": 2,
+            "position": [
+                0,
+                250
+            ],
+            "id": "merge"
+        },
+        {
+            "parameters": {
+                "jsCode": "function sanitizeValue(value) {\n  if (value === null || value === undefined) return '';\n  if (typeof value === 'object') {\n    const obj = {};\n    for (const key in value) obj[key] = sanitizeValue(value[key]);\n    return obj;\n  }\n  let str = String(value).trim();\n  str = str.replace(/\\s{2,}/g, ' ');\n  str = str.replace(/[<>`$\\\\{}]/g, '');\n  return str;\n}\n\nconst body = $input.first().json.body || {};\nconst nodeName = $node[\"Merge Triggers\"].name;\n\nlet trigger_type = \"\";\nif (nodeName.includes(\"Follower\")) trigger_type = \"follower\";\nelse if (nodeName.includes(\"DM\")) trigger_type = \"dm_received\";\nelse if (nodeName.includes(\"Comment\")) trigger_type = \"comment\";\nelse if (nodeName.includes(\"Mention\")) trigger_type = \"story_mention\";\nelse if (nodeName.includes(\"Reply\")) trigger_type = \"story_reply\";\n\nreturn [{\n  json: {\n    trigger_type,\n    instagram_account_id: sanitizeValue(body.instagram_account_id),\n    sender_username: sanitizeValue(body.follower_username || body.sender_username || body.commenter_username).replace('@', ''),\n    message_text: sanitizeValue(body.message_text || body.comment_text || body.reply_text),\n    sender_id: sanitizeValue(body.follower_id || body.sender_id || body.commenter_id),\n    post_id: sanitizeValue(body.post_id),\n    story_id: sanitizeValue(body.story_id),\n    comment_id: sanitizeValue(body.comment_id)\n  }\n}];"
+            },
+            "name": "Sanitize Input",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                150,
+                250
+            ],
+            "id": "sanitize"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "={{ $env.BACKEND_URL }}/api/integrations/companies/by-instagram-account/{{ $json.instagram_account_id }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{ $env.API_TOKEN }}"
+                        }
+                    ]
+                }
+            },
+            "name": "Get Company Info",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                500,
+                250
+            ],
+            "id": "get_company"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "={{ $env.BACKEND_URL }}/api/automations/match",
+                "sendQueryParameters": true,
+                "queryParameters": {
+                    "parameters": [
+                        {
+                            "name": "company_id",
+                            "value": "={{ $node[\"Get Company Info\"].json.id }}"
+                        },
+                        {
+                            "name": "trigger_type",
+                            "value": "={{ $node[\"Sanitize Input\"].json.trigger_type }}"
+                        },
+                        {
+                            "name": "message",
+                            "value": "={{ $node[\"Sanitize Input\"].json.message_text }}"
+                        },
+                        {
+                            "name": "sender",
+                            "value": "={{ $node[\"Sanitize Input\"].json.sender_username }}"
+                        },
+                        {
+                            "name": "platform",
+                            "value": "instagram"
+                        }
+                    ]
+                }
+            },
+            "name": "Match Automation",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                750,
+                250
+            ],
+            "id": "match"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "boolean": [
+                        {
+                            "value1": "={{ !!$json.id }}",
+                            "value2": true
+                        }
+                    ]
+                }
+            },
+            "name": "Found Automation?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                1000,
+                250
+            ],
+            "id": "if_active"
+        },
+        {
+            "parameters": {
+                "fieldToSplitOut": "actions"
+            },
+            "name": "Execute Actions",
+            "type": "n8n-nodes-base.itemLists",
+            "typeVersion": 3,
+            "position": [
+                1150,
+                150
+            ],
+            "id": "loop"
+        },
+        {
+            "parameters": {
+                "jsCode": "const automation = $node[\"Match Automation\"].json;\nconst company = $node[\"Get Company Info\"].json;\nconst webhook = $node[\"Sanitize Input\"].json;\n\nconst variables = {\n  name: webhook.sender_username,\n  username: webhook.sender_username,\n  company: company.name,\n  time: new Date().toLocaleString('pt-BR', {\n    timeZone: 'America/Sao_Paulo',\n    hour: '2-digit',\n    minute: '2-digit'\n  })\n};\n\nlet processedMessage = $json.content || \"\";\nObject.keys(variables).forEach(key => {\n  processedMessage = processedMessage.replace(new RegExp(`\\\\{${key}\\\\}`,'g'), variables[key]);\n});\n\nreturn [{ json: { ...$json, processed_message: processedMessage, company, webhook, automation } }];"
+            },
+            "name": "Process Variables",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1350,
+                150
+            ],
+            "id": "process_vars"
+        },
+        {
+            "parameters": {
+                "dataType": "string",
+                "value1": "={{ $json.type }}",
+                "rules": {
+                    "rules": [
+                        {
+                            "value2": "send_dm"
+                        },
+                        {
+                            "value2": "add_tag"
+                        },
+                        {
+                            "value2": "delay"
+                        },
+                        {
+                            "value2": "webhook"
+                        }
+                    ]
+                }
+            },
+            "name": "Action Type",
+            "type": "n8n-nodes-base.switch",
+            "typeVersion": 1,
+            "position": [
+                1550,
+                150
+            ],
+            "id": "switch_type"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://graph.instagram.com/v21.0/{{ $json.company.instagram_page_id }}/messages",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{ $json.company.instagram_access_token }}"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "recipient",
+                            "value": "={{ { id: $json.webhook.sender_id } }}"
+                        },
+                        {
+                            "name": "message",
+                            "value": "={{ { text: $json.processed_message } }}"
+                        }
+                    ]
+                }
+            },
+            "name": "Send Instagram DM",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1800,
+                -50
+            ],
+            "id": "send_dm"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $env.BACKEND_URL }}/api/crm/contacts/{{ $json.webhook.sender_id }}/tags",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "tag",
+                            "value": "={{ $json.tag }}"
+                        }
+                    ]
+                }
+            },
+            "name": "Add Contact Tag",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1800,
+                120
+            ],
+            "id": "add_tag"
+        },
+        {
+            "parameters": {
+                "amount": "={{ $json.seconds || 0 }}",
+                "unit": "seconds"
+            },
+            "name": "Wait Delay",
+            "type": "n8n-nodes-base.wait",
+            "typeVersion": 1,
+            "position": [
+                1800,
+                290
+            ],
+            "id": "wait"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $json.url }}",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "company_id",
+                            "value": "={{ $json.company.id }}"
+                        },
+                        {
+                            "name": "automation_id",
+                            "value": "={{ $json.automation.id }}"
+                        }
+                    ]
+                }
+            },
+            "name": "External Webhook",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1800,
+                460
+            ],
+            "id": "ext_webhook"
+        },
+        {
+            "parameters": {
+                "jsCode": "const now = new Date().toLocaleString('pt-BR', {\n  timeZone: 'America/Sao_Paulo',\n  day: '2-digit', month: '2-digit', year: 'numeric',\n  hour: '2-digit', minute: '2-digit', second: '2-digit'\n});\n\nreturn [{\n  json: {\n    company_id: $json.company.id,\n    automation_id: $json.automation.id,\n    recipient: $json.webhook.sender_username,\n    success: true,\n    executed_at: now,\n    automation_name: $json.automation.name\n  }\n}];"
+            },
+            "name": "Format Log Data",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2200,
+                250
+            ],
+            "id": "format_log"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $env.BACKEND_URL }}/api/analytics/log",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "log",
+                            "value": "={{ $json }}"
+                        }
+                    ]
+                }
+            },
+            "name": "Log Analytics",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                2400,
+                250
+            ],
+            "id": "log"
+        },
+        {
+            "parameters": {
+                "responseBody": "={\n  \"success\": true,\n  \"automation_executed\": \"{{ $json.automation_name }}\",\n  \"timestamp\": \"{{ $json.executed_at }}\"\n}"
+            },
+            "name": "Send Response",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                2600,
+                250
+            ],
+            "id": "response"
+        }
+    ],
+    "connections": {
+        "New Follower Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Triggers",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "DM Received Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Triggers",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Comment Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Triggers",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Story Mention Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Triggers",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Story Reply Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Triggers",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Merge Triggers": {
+            "main": [
+                [
+                    {
+                        "node": "Sanitize Input",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Sanitize Input": {
+            "main": [
+                [
+                    {
+                        "node": "Get Company Info",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Company Info": {
+            "main": [
+                [
+                    {
+                        "node": "Match Automation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Match Automation": {
+            "main": [
+                [
+                    {
+                        "node": "Found Automation?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Found Automation?": {
+            "main": [
+                [
+                    {
+                        "node": "Execute Actions",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                []
+            ]
+        },
+        "Execute Actions": {
+            "main": [
+                [
+                    {
+                        "node": "Process Variables",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Process Variables": {
+            "main": [
+                [
+                    {
+                        "node": "Action Type",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Action Type": {
+            "main": [
+                [
+                    {
+                        "node": "Send Instagram DM",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Add Contact Tag",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Wait Delay",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "External Webhook",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Send Instagram DM": {
+            "main": [
+                [
+                    {
+                        "node": "Format Log Data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Add Contact Tag": {
+            "main": [
+                [
+                    {
+                        "node": "Format Log Data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Wait Delay": {
+            "main": [
+                [
+                    {
+                        "node": "Format Log Data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "External Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Format Log Data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Log Data": {
+            "main": [
+                [
+                    {
+                        "node": "Log Analytics",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Log Analytics": {
+            "main": [
+                [
+                    {
+                        "node": "Send Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

@@ -1,62 +1,75 @@
-from sqlalchemy import Column, String, Integer, Boolean, JSON, DateTime, ForeignKey, Text
-from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
-from datetime import datetime
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, Integer, JSON, ARRAY
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.sql import func
+import uuid
+from database import Base
 
-Base = declarative_base()
-
-class Company(Base):
-    __tablename__ = "companies"
-
-    id = Column(String, primary_key=True)
-    name = Column(String)
-    instagram_account_id = Column(String, unique=True, index=True)
-    instagram_access_token = Column(Text)       # token longa duração (60 dias)
-    instagram_token_expires = Column(DateTime, nullable=True)
-    whatsapp_number = Column(String)
-    is_active = Column(Boolean, default=True)
-    oauth_state = Column(String, nullable=True)  # CSRF para OAuth flow
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    automations = relationship("Automation", back_populates="company")
-    contacts = relationship("Contact", back_populates="company")
+class User(Base):
+    __tablename__ = "users"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String, unique=True, nullable=False)
+    full_name = Column(String)
+    role = Column(String, default="member")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class Automation(Base):
     __tablename__ = "automations"
-    
-    id = Column(String, primary_key=True)
-    company_id = Column(String, ForeignKey("companies.id"))
-    name = Column(String)
-    platform = Column(String, default="instagram") # instagram, whatsapp
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False)
+    platform = Column(String, nullable=False)  # 'instagram', 'whatsapp'
+    triggers = Column(JSONB, server_default='{}')
+    actions = Column(JSONB, server_default='[]')
     is_active = Column(Boolean, default=True)
-    triggers = Column(JSON) # {type: "comment", keywords: ["quero", "valor"]}
-    actions = Column(JSON) # [{order: 1, type: "reply_comment", content: "Olá!"}, {order: 2, type: "send_dm", content: "..."}]
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    company = relationship("Company", back_populates="automations")
-    logs = relationship("AnalyticsLog", back_populates="automation")
+    stats_triggered = Column(Integer, default=0)
+    stats_finished = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 class Contact(Base):
     __tablename__ = "contacts"
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    company_id = Column(String, ForeignKey("companies.id"))
-    platform = Column(String)
-    external_id = Column(String, index=True) # ID do Instagram ou Telefone do WhatsApp
-    username = Column(String)
-    tags = Column(JSON, default=[])
-    last_interaction = Column(DateTime, default=datetime.utcnow)
-    
-    company = relationship("Company", back_populates="contacts")
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    platform = Column(String) # 'instagram', 'whatsapp'
+    external_id = Column(String)
+    name = Column(String)
+    phone = Column(String)
+    avatar_url = Column(Text)
+    tags = Column(JSONB, server_default='[]')
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    contact_id = Column(UUID(as_uuid=True), ForeignKey("contacts.id"))
+    platform = Column(String, nullable=False)
+    last_message = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Message(Base):
+    __tablename__ = "messages"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey("conversations.id"))
+    content = Column(Text)
+    sender_type = Column(String) # 'user', 'bot', 'agent'
+    sent_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class InstagramAccount(Base):
+    __tablename__ = "instagram_accounts"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    username = Column(String, nullable=False)
+    access_token = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class WhatsAppAccount(Base):
+    __tablename__ = "whatsapp_accounts"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    phone = Column(String, nullable=False)
+    api_token = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class AnalyticsLog(Base):
     __tablename__ = "analytics_logs"
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    automation_id = Column(String, ForeignKey("automations.id"))
-    executed_at = Column(DateTime, default=datetime.utcnow)
-    success = Column(Boolean)
-    trigger_data = Column(JSON)
-    error_message = Column(String, nullable=True)
-    
-    automation = relationship("Automation", back_populates="logs")
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    automation_id = Column(UUID(as_uuid=True), ForeignKey("automations.id"))
+    executed_at = Column(DateTime(timezone=True), server_default=func.now())
+    success = Column(Boolean, default=True)
+    error_message = Column(Text)

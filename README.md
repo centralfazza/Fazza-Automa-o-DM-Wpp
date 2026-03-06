@@ -1,35 +1,41 @@
-# Fazza Automation - Instagram & WhatsApp
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-Sistema de automação inteligente para Fazza CRM.
+# Run and deploy your AI Studio app
 
-## Arquitetura (3 Camadas)
+This contains everything you need to run your app locally.
 
-Este projeto segue a arquitetura de 3 camadas definida em `AGENTE.MD`:
+View your app in AI Studio: https://ai.studio/apps/drive/1aCZBqInVhJmoIYM846LVfpSIpIP0jrpL
 
-1.  **Layer 1 - DIRECTIVES**: Regras de negócio e documentação do motor de automação.
-2.  **Layer 2 - ORCHESTRATION**: Decisões inteligentes (Agente I.A.).
-3.  **Layer 3 - EXECUTION**: Código Python determinístico (FastAPI, SQLAlchemy).
+## Run Locally
 
-## Tecnologias
+**Prerequisites:**  Node.js
 
-- Python 3.10+
-- FastAPI
-- SQLAlchemy (SQLite)
-- Instagram Graph API
-- Vercel (Deployment)
 
-## Como rodar localmente
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
 
-1. Crie um ambiente virtual: `python -m venv venv`
-2. Ative: `source venv/bin/activate` (Mac/Linux)
-3. Instale: `pip install -r requirements.txt`
-4. Configure o `.env`
-5. Rode: `uvicorn execution.backend.app:app --reload`
+## 🚀 N8N Deployment
 
-## Estrutura de Pastas
+We use a Python script to automate the deployment of workflows to the Fazza N8N instance.
 
-- `/directives`: Documentação das regras de automação.
-- `/execution`: Código fonte do sistema.
-  - `/backend`: Core logic, models, database.
-  - `/routes`: Endpoints da API.
-- `/api`: Entry point para o Vercel.
+### Prerequisites
+- Python 3.x
+- `requests` library: `pip install requests`
+
+### Environment Variables
+Configure these in your terminal or `.env`:
+```bash
+export N8N_API_URL="https://n8n.fazza.com/api/v1"
+export N8N_API_KEY="your_api_key"
+```
+
+### Usage
+To deploy the master workflow:
+```bash
+python execution/scripts/deploy_to_n8n.py --workflow n8n_workflow/automation_master.json --activate
+```
+

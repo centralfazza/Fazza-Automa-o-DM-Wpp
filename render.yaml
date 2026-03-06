@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: fazza-automation-backend
+    env: python
+    buildCommand: pip install -r execution/backend/requirements.txt
+    startCommand: uvicorn execution.backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fazza-db
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
+databases:
+  - name: fazza-db
+    databaseName: fazza_automation
+    user: fazza_user
