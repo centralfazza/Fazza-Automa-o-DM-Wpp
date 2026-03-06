@@ -4,4 +4,19 @@ import sys
 # Corrige problema de caminhos no AWS Lambda (Vercel)
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from execution.backend.app import app
+try:
+    from execution.backend.app import app
+except Exception as e:
+    import traceback
+    from fastapi import FastAPI
+    from fastapi.responses import HTMLResponse
+    
+    app = FastAPI()
+    error_trace = traceback.format_exc()
+    
+    @app.get("/{full_path:path}")
+    async def debug_error(full_path: str):
+        return HTMLResponse(
+            status_code=500,
+            content=f"<html><body><h1>Vercel Startup Error</h1><pre>{error_trace}</pre></body></html>"
+        )
