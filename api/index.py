@@ -5,7 +5,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
-    from execution.backend.app import app
+    from backend.main import app
 except Exception as e:
     import traceback
     from fastapi import FastAPI
