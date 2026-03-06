@@ -14,14 +14,14 @@ logger = logging.getLogger(__name__)
 
 GRAPH_BASE = "https://graph.facebook.com/v19.0"
 
-APP_ID = os.getenv("INSTAGRAM_APP_ID", "")
-APP_SECRET = os.getenv("INSTAGRAM_APP_SECRET", "")
+APP_ID = os.getenv("INSTAGRAM_APP_ID", "").strip()
+APP_SECRET = os.getenv("INSTAGRAM_APP_SECRET", "").strip()
 REDIRECT_URI = os.getenv(
     "INSTAGRAM_REDIRECT_URI",
     "https://automacao-dm.vercel.app/api/auth/instagram/callback"
-)
+).strip()
 
-logger.info(f"Oauth config: APP_ID={APP_ID[:4]}***, REDIRECT_URI={REDIRECT_URI}")
+logger.info(f"Oauth config loaded: APP_ID prefix={APP_ID[:4]}, ID length={len(APP_ID)}, REDIRECT_URI={REDIRECT_URI}")
 
 SCOPES = ",".join([
     "instagram_basic",
