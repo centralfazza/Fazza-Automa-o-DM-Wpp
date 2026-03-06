@@ -14,6 +14,17 @@ except Exception as e:
     app = FastAPI()
     error_trace = traceback.format_exc()
     
+    @app.get("/debug-env")
+    async def debug_env():
+        import os
+        app_id = os.getenv("INSTAGRAM_APP_ID", "")
+        return {
+            "app_id_len": len(app_id),
+            "app_id_prefix": app_id[:4] if app_id else "NONE",
+            "redirect_uri": os.getenv("INSTAGRAM_REDIRECT_URI", "NOT_SET"),
+            "env_keys": list(os.environ.keys())
+        }
+
     @app.get("/{full_path:path}")
     async def debug_error(full_path: str):
         return HTMLResponse(
