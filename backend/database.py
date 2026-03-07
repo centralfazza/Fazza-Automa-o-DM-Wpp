@@ -7,10 +7,17 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
+if not DATABASE_URL:
+    print("⚠️ DATABASE_URL not set. Using in-memory SQLite for development.")
+    DATABASE_URL = "sqlite+aiosqlite:///./dev.db"
+
+if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-engine = create_async_engine(DATABASE_URL, echo=True)
+# Disable echo in production for performance
+is_production = os.getenv("VERCEL", "") or os.getenv("RAILWAY_ENVIRONMENT", "")
+engine = create_async_engine(DATABASE_URL, echo=not is_production, pool_pre_ping=True)
+
 AsyncSessionLocal = sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
 )

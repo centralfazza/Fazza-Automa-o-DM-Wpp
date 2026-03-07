@@ -15,3 +15,4 @@ alembic==1.13.1
 pytest==8.0.0
 aioredis==2.0.1
 requests
+aiosqlite==0.19.0
