@@ -88,6 +88,12 @@ async def instagram_webhook(payload: dict, background_tasks: BackgroundTasks, db
             sender_id = msg_data.get('sender', {}).get('id')
             message_obj = msg_data.get('message', {})
             message_text = message_obj.get('text', '')
+            
+            # CRITICAL: Skip echo messages (messages sent BY the bot itself)
+            # Without this check, the bot enters an infinite reply loop
+            is_echo = message_obj.get('is_echo', False)
+            if is_echo:
+                return {"status": "echo_ignored"}
 
             if sender_id and message_text:
                 matched_auto = await match_automation(
