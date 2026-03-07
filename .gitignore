@@ -24,3 +24,16 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# Environment
+.env
+.env.local
+.env.*.local

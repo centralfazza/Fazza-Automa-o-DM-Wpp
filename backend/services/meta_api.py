@@ -32,28 +32,30 @@ class MetaAPIClient:
                         return False
         return False
 
-    async def send_instagram_message(self, recipient_id: str, message_text: str) -> bool:
+    async def send_instagram_message(self, recipient_id: str, message_text: str, access_token: Optional[str] = None) -> bool:
         """Sends a text message via Instagram Graph API"""
-        if not self.ig_token:
+        token = access_token or self.ig_token
+        if not token:
             print(f"[IG SIMULATION] To {recipient_id}: {message_text}")
             return True
 
         url = f"{self.ig_url}/me/messages"
-        headers = {"Authorization": f"Bearer {self.ig_token}"}
+        headers = {"Authorization": f"Bearer {token}"}
         payload = {
             "recipient": {"id": recipient_id},
             "message": {"text": message_text}
         }
         return await self._send_with_retry(url, headers, payload)
 
-    async def send_whatsapp_message(self, phone_number: str, message_text: str, phone_number_id: str) -> bool:
+    async def send_whatsapp_message(self, phone_number: str, message_text: str, phone_number_id: str, access_token: Optional[str] = None) -> bool:
         """Sends a text message via WhatsApp Cloud API"""
-        if not self.wa_token:
+        token = access_token or self.wa_token
+        if not token:
             print(f"[WA SIMULATION] To {phone_number}: {message_text}")
             return True
 
         url = f"{self.wa_url}/{phone_number_id}/messages"
-        headers = {"Authorization": f"Bearer {self.wa_token}"}
+        headers = {"Authorization": f"Bearer {token}"}
         payload = {
             "messaging_product": "whatsapp",
             "to": phone_number,

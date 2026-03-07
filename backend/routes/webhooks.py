@@ -53,10 +53,24 @@ async def run_native_automation(automation_id: str, sender: str, platform: str, 
             await db_session.refresh(contact)
 
         # Initialize Engine
+        access_token = None
+        if platform == "instagram" or platform == "whatsapp":
+             # We fetch platform channels based on external id matchingprovider_id
+             # Usually provider_id holds the meta page ID or waba id for the client
+             channel_result = await db_session.execute(
+                select(models.Channel).where(
+                    models.Channel.automation_id == automation.id
+                )
+             )
+             channel = channel_result.scalar_one_or_none()
+             if channel:
+                 access_token = channel.access_token
+
         engine = ExecutionEngine(
             automation=automation.__dict__, 
             contact=contact.__dict__, 
-            initial_message=message
+            initial_message=message,
+            access_token=access_token
         )
         await engine.run()
 

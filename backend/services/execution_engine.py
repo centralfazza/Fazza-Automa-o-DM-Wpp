@@ -6,10 +6,11 @@ import models
 from sqlalchemy import select
 
 class ExecutionEngine:
-    def __init__(self, automation: Dict[str, Any], contact: Dict[str, Any], initial_message: str):
+    def __init__(self, automation: Dict[str, Any], contact: Dict[str, Any], initial_message: str, access_token: Optional[str] = None):
         self.automation = automation # The DB record dump
         self.contact = contact       # The DB record dump OR dict with id, platform, phone, external_id
         self.initial_message = initial_message
+        self.access_token = access_token
         
         # Parse the Flow JSON
         self.graph = self.automation.get('actions', {})
@@ -119,9 +120,9 @@ class ExecutionEngine:
     async def _send_msg(self, text: str) -> bool:
         platform = self.automation.get('platform')
         if platform == 'instagram':
-            return await meta_api.send_instagram_message(self.contact.get('external_id'), text)
+            return await meta_api.send_instagram_message(self.contact.get('external_id'), text, self.access_token)
         elif platform == 'whatsapp':
             phone = self.contact.get('phone') or self.contact.get('external_id')
-            return await meta_api.send_whatsapp_message(phone, text, "default")
+            return await meta_api.send_whatsapp_message(phone, text, "default", self.access_token)
         return False
 
