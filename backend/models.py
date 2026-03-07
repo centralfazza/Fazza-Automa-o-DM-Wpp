@@ -68,8 +68,25 @@ class WhatsAppAccount(Base):
     api_token = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+class Channel(Base):
+    """Unified channel model for multi-tenant token storage.
+    Each client's connected Instagram/WhatsApp account stores its token here.
+    """
+    __tablename__ = "channels"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    platform = Column(String, nullable=False)  # 'instagram', 'whatsapp'
+    provider_id = Column(String, nullable=False)  # Meta Page ID or WABA phone number ID
+    name = Column(String)  # Display name (e.g. @fazza_crm)
+    access_token = Column(Text, nullable=False)
+    company_id = Column(String)  # For multi-company partitioning
+    automation_id = Column(UUID(as_uuid=True), ForeignKey("automations.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
 class AnalyticsLog(Base):
     __tablename__ = "analytics_logs"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id = Column(String)
     automation_id = Column(UUID(as_uuid=True), ForeignKey("automations.id"))
     trigger_type = Column(String)

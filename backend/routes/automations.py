@@ -148,6 +148,7 @@ async def toggle_automation(automation_id: UUID, db: AsyncSession = Depends(get_
         raise HTTPException(status_code=404, detail="Automation not found")
     
     db_automation.is_active = not db_automation.is_active
+    db_automation.status = "active" if db_automation.is_active else "inactive"
     await db.commit()
     await db.refresh(db_automation)
     return db_automation

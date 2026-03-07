@@ -76,14 +76,24 @@ async def send_manual_message(conversation_id: UUID, message: schemas.MessageCre
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
 
-    # 2. Send message via Meta API
+    # 2. Send message via Meta API — lookup dynamic token from Channel
     from services.meta_api import meta_api
+    
+    channel_result = await db.execute(
+        select(models.Channel).where(
+            models.Channel.platform == contact.platform,
+            models.Channel.is_active == True
+        )
+    )
+    channel = channel_result.scalar_one_or_none()
+    dynamic_token = channel.access_token if channel else None
+    
     success = False
     if contact.platform == 'instagram':
-        success = await meta_api.send_instagram_message(contact.external_id, message.content)
+        success = await meta_api.send_instagram_message(contact.external_id, message.content, dynamic_token)
     elif contact.platform == 'whatsapp':
-        # phone_number_id should ideally be stored in the account/channel model
-        success = await meta_api.send_whatsapp_message(contact.phone or "unknown", message.content, "default_wa_id")
+        phone_number_id = channel.provider_id if channel else "default_wa_id"
+        success = await meta_api.send_whatsapp_message(contact.phone or "unknown", message.content, phone_number_id, dynamic_token)
 
     if not success:
         raise HTTPException(status_code=500, detail="Failed to send message via Meta API")
@@ -91,8 +101,8 @@ async def send_manual_message(conversation_id: UUID, message: schemas.MessageCre
     # 3. Save to DB
     db_message = models.Message(
         conversation_id=conversation_id,
+        content=message.content,
         sender_type="agent",
-        **message.model_dump()
     )
     db.add(db_message)
     conv.last_message = message.content
