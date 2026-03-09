@@ -25,8 +25,8 @@ async def verify_instagram_webhook(request: Request):
         print(f"✅ Webhook verified! Returning challenge: {hub_challenge}")
         # Retornamos o challenge exatamente como recebido (como texto ou int conforme o Meta enviar)
         # Usamos Response direta para evitar aspas extras de JSON se for string
-        from fastapi.responses import Response
-        return Response(content=hub_challenge, media_type="text/plain")
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(content=hub_challenge)
 
     print("❌ Webhook verification failed")
     raise HTTPException(status_code=403, detail="Verification failed")
