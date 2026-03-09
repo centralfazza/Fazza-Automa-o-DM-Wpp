@@ -14,10 +14,21 @@ async def verify_instagram_webhook(request: Request):
     """Verificação do webhook pelo Facebook"""
     params = request.query_params
     verify_token = os.getenv("INSTAGRAM_VERIFY_TOKEN")
+    
+    hub_mode = params.get("hub.mode")
+    hub_verify_token = params.get("hub.verify_token")
+    hub_challenge = params.get("hub.challenge")
 
-    if params.get("hub.mode") == "subscribe" and params.get("hub.verify_token") == verify_token:
-        return int(params.get("hub.challenge"))
+    print(f"DEBUG Webhook: mode={hub_mode}, received_token={hub_verify_token}, expected_token={verify_token}")
 
+    if hub_mode == "subscribe" and hub_verify_token == verify_token:
+        print(f"✅ Webhook verified! Returning challenge: {hub_challenge}")
+        # Retornamos o challenge exatamente como recebido (como texto ou int conforme o Meta enviar)
+        # Usamos Response direta para evitar aspas extras de JSON se for string
+        from fastapi.responses import Response
+        return Response(content=hub_challenge, media_type="text/plain")
+
+    print("❌ Webhook verification failed")
     raise HTTPException(status_code=403, detail="Verification failed")
 
 
