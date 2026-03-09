@@ -141,5 +141,26 @@ class ExecutionEngine:
                 self.contact.get('phone', 'unknown'), text, "default_wa_id")
         return False
 
-        return True
+
+class AutomationEngine:
+    def __init__(self, db):
+        self.db = db
+
+    def process_instagram_comment(self, value: Dict[str, Any]):
+        """Callback para novos comentários no Instagram"""
+        print(f"💬 Comentário recebido: {value.get('text')}")
+        # Aqui seria a lógica de busca por palavra-chave e disparo do ExecutionEngine
+        pass
+
+    def process_instagram_dm(self, value: Dict[str, Any]):
+        """Callback para novas DMs no Instagram"""
+        print(f"📩 DM recebida de {value.get('sender_username')}: {value.get('message_text')}")
+        # Aqui seria a lógica de busca por palavra-chave e disparo do ExecutionEngine
+        pass
+
+    def process_new_follower(self, value: Dict[str, Any]):
+        """Callback para novos seguidores no Instagram"""
+        print(f"👤 Novo seguidor: {value.get('follower_username')}")
+        # Disparo de fluxo de boas-vindas
+        pass
 

@@ -29,7 +29,8 @@ async def handle_instagram_webhook(request: Request, db: Session = Depends(get_d
     """
     payload = await request.body()
     signature = request.headers.get("X-Hub-Signature-256")
-    app_secret = os.getenv("APP_SECRET")
+    # Tenta pegar APP_SECRET ou INSTAGRAM_APP_SECRET
+    app_secret = os.getenv("APP_SECRET") or os.getenv("INSTAGRAM_APP_SECRET")
 
     # Valida assinatura HMAC
     if signature and app_secret:
