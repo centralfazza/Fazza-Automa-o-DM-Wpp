@@ -66,6 +66,18 @@ class WhatsAppAccount(Base):
     api_token = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+class Company(Base):
+    __tablename__ = "companies"
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    instagram_account_id = Column(String, unique=True)
+    instagram_access_token = Column(String)
+    instagram_token_expires = Column(DateTime)
+    whatsapp_number = Column(String)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class AnalyticsLog(Base):
     __tablename__ = "analytics_logs"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
